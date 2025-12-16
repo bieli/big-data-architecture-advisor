@@ -37,35 +37,45 @@ The advisor is implemented in **Rust** using the [`crepe`](https://crates.io/cra
    - With `--history` flag, prints past saved decisions.
 
 ## Example Run
+
+### One answer mode
+
 ```bash
 $ cargo run
 === Big Data Architecture Advisor CLI ===
-Enter data volume (small/medium/large): large
-Enter workload type (batch/streaming/mixed): mixed
-Enter SLA requirement (low/high): high
-Enter budget (low/high): high
-Enter observability requirement (low/medium/high): high
-Enter SLA weight (default 5): 10
-Enter Budget weight (default 3): 1
-Enter Volume weight (default 2): 2
-Enter Workload weight (default 1): 1
-Enter Observability weight (default 4): 5
+*** SINGLE Recommendations Mode ***
+
+Enter data volume (small/medium/large):
+large
+Enter workload type (batch/streaming/mixed):
+batch
+Enter SLA requirement (low/high):
+low
+Enter budget (low/high):
+high
+Enter observability requirement (low/medium/high):
+medium
+Enter SLA weight (default 5):
+3
+Enter Budget weight (default 3):
+2
+Enter Volume weight (default 2):
+1
+Enter Workload weight (default 1):
+1
+Enter Observability weight (default 4):
+2
 
 === Recommendations ===
--> Lakehouse (score: 190)
--> Data Mesh (score: 180)
--> ML Platform (score: 176)
--> Hybrid Cloud (score: 160)
--> Monitoring Stack (Prometheus/Grafana) (score: 155)
+-> Cloud-native Monitoring (CloudWatch/Stackdriver/Azure Monitor) (score: 67)
 
 === Explanations ===
-- Lakehouse chosen for large mixed workloads, high SLA, sufficient budget.
-- Data Mesh chosen for large distributed domains, mixed workloads, decentralized ownership.
-- ML Platform chosen for advanced analytics, ML, sufficient budget.
-- Hybrid Cloud chosen for large mixed workloads, strict SLA, flexibility across on-prem/cloud.
-- Monitoring stack chosen for deep metrics, dashboards, and SLA compliance.
+- Cloud-native monitoring chosen for integrated observability in cloud ecosystems.
 ```
 
+### Multi answers mode
+
+#### IN PROGRESS
 
 ## TODO list
 - [ ] Add --clear-history flag.
