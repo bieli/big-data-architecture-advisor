@@ -524,7 +524,7 @@ mod tests {
 
     #[test]
     fn test_strict_mode_kafka() {
-        let recs = run_strict("small", "streaming", "high", "low", "high", 5, 3, 2, 1, 4);
+        let recs = run_strict("small", "streaming", "high", "low", "low", 5, 3, 2, 1, 4);
         assert_eq!(recs[0].0, "Kafka/Flink");
     }
 
@@ -547,5 +547,85 @@ mod tests {
         let etl_score = recs.iter().find(|(n, _)| n == "ETL Pipelines").unwrap().1;
         let lakehouse_score = recs.iter().find(|(n, _)| n == "Lakehouse").unwrap().1;
         assert!(etl_score >= lakehouse_score);
+    }
+
+    fn make_profile(
+        name: &'static str,
+        volume: &'static str,
+        workload: &'static str,
+        sla: &'static str,
+        budget: &'static str,
+        observability: &'static str,
+        base: i32,
+    ) -> ArchProfile {
+        ArchProfile {
+            name,
+            volume,
+            workload,
+            sla,
+            budget,
+            observability,
+            base,
+        }
+    }
+
+    #[test]
+    fn test_exact_match_full_points() {
+        let profile = make_profile("Lakehouse", "large", "mixed", "high", "high", "high", 95);
+        let user = ("large", "mixed", "high", "high", "high");
+        let weights = (5, 3, 2, 1, 4);
+        let score = similarity_score(user, weights, &profile);
+        // Expect base + full points for all matches
+        assert!(score > 95);
+        assert_eq!(score, 95 + 5 * 10 + 3 * 10 + 2 * 10 + 1 * 10 + 4 * 10);
+    }
+
+    #[test]
+    fn test_partial_match_any_fields() {
+        let profile = make_profile("Kafka/Flink", "any", "streaming", "high", "any", "high", 90);
+        let user = ("small", "streaming", "high", "low", "high");
+        let weights = (5, 3, 2, 1, 4);
+        let score = similarity_score(user, weights, &profile);
+        // Volume and Budget are "any" → partial credit
+        assert!(score > 90);
+        assert_eq!(score, 90 + 2 * 5 + 1 * 10 + 5 * 10 + 3 * 5 + 4 * 10);
+    }
+
+    #[test]
+    fn test_mismatch_no_points() {
+        let profile = make_profile("ETL Pipelines", "any", "batch", "low", "low", "low", 50);
+        let user = ("large", "streaming", "high", "high", "high");
+        let weights = (5, 3, 2, 1, 4);
+        let score = similarity_score(user, weights, &profile);
+        // Only volume is "any" → partial credit, everything else mismatched
+        assert_eq!(score, 50 + 2 * 5);
+    }
+
+    #[test]
+    fn test_observability_partial_credit() {
+        let profile = make_profile(
+            "Cloud-native Monitoring",
+            "any",
+            "any",
+            "any",
+            "high",
+            "medium",
+            75,
+        );
+        let user = ("medium", "mixed", "low", "high", "low");
+        let weights = (5, 3, 2, 1, 4);
+        let score = similarity_score(user, weights, &profile);
+        // SLA "any" → partial, volume/workload "any" → partial, budget exact, observability mismatch
+        assert_eq!(score, 75 + 5 * 5 + 2 * 5 + 1 * 5 + 3 * 10);
+    }
+
+    #[test]
+    fn test_high_observability_weight_influence() {
+        let profile = make_profile("Prometheus/Grafana", "any", "any", "any", "any", "high", 85);
+        let user = ("small", "batch", "low", "low", "high");
+        let weights = (5, 3, 2, 1, 10); // observability weight very high
+        let score = similarity_score(user, weights, &profile);
+        // Observability exact match with high weight should dominate
+        assert!(score > 150);
     }
 }
