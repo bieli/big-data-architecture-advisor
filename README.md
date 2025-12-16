@@ -14,6 +14,28 @@ This project was motivated by the need for a **transparent, rule-based expert as
 ## How It Works?
 The advisor is implemented in **Rust** using the [`crepe`](https://crates.io/crates/crepe) Datalog engine. It works as follows:
 
+```rust
+crepe! {
+    @input
+    struct Volume(&'static str);
+    @input
+    struct Workload(&'static str);
+    @input
+    struct SLA(&'static str);
+    @input
+    struct Budget(&'static str);
+    @input
+    struct Observability(&'static str);
+
+    @output
+    struct Recommendation(&'static str, i32);
+    @output
+    struct Explanation(&'static str);
+
+...
+```
+
+### Important points
 1. **Inputs**: The user provides facts about their scenario:
    - Data Volume: `small`, `medium`, `large`
    - Workload Type: `batch`, `streaming`, `mixed`
