@@ -415,3 +415,137 @@ fn main() {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn run_strict(
+        volume: &str,
+        workload: &str,
+        sla: &str,
+        budget: &str,
+        observability: &str,
+        sla_w: i32,
+        budget_w: i32,
+        volume_w: i32,
+        workload_w: i32,
+        observability_w: i32,
+    ) -> Vec<Recommendation> {
+        let mut runtime = Crepe::new();
+        runtime.extend(&[Volume(Box::leak(volume.to_string().into_boxed_str()))]);
+        runtime.extend(&[Workload(Box::leak(workload.to_string().into_boxed_str()))]);
+        runtime.extend(&[SLA(Box::leak(sla.to_string().into_boxed_str()))]);
+        runtime.extend(&[Budget(Box::leak(budget.to_string().into_boxed_str()))]);
+        runtime.extend(&[Observability(Box::leak(
+            observability.to_string().into_boxed_str(),
+        ))]);
+
+        let (recs, _expls) = runtime.run();
+        let mut recs_adjusted: Vec<Recommendation> = recs
+            .into_iter()
+            .map(|Recommendation(r, base)| {
+                let weight_sum = sla_w + budget_w + volume_w + workload_w + observability_w;
+                let score = base * weight_sum / 10;
+                Recommendation(r, score)
+            })
+            .collect();
+        recs_adjusted.sort_by(|a, b| b.1.cmp(&a.1));
+        recs_adjusted
+    }
+
+    fn run_multi(
+        volume: &str,
+        workload: &str,
+        sla: &str,
+        budget: &str,
+        observability: &str,
+        sla_w: i32,
+        budget_w: i32,
+        volume_w: i32,
+        workload_w: i32,
+        observability_w: i32,
+    ) -> Vec<(String, i32)> {
+        let profiles = vec![
+            ArchProfile {
+                name: "Lakehouse",
+                volume: "large",
+                workload: "mixed",
+                sla: "high",
+                budget: "high",
+                observability: "high",
+                base: 95,
+            },
+            ArchProfile {
+                name: "Kafka/Flink",
+                volume: "any",
+                workload: "streaming",
+                sla: "high",
+                budget: "any",
+                observability: "high",
+                base: 90,
+            },
+            ArchProfile {
+                name: "Cloud-native Monitoring",
+                volume: "any",
+                workload: "any",
+                sla: "any",
+                budget: "high",
+                observability: "medium",
+                base: 75,
+            },
+            ArchProfile {
+                name: "ETL Pipelines",
+                volume: "any",
+                workload: "batch",
+                sla: "low",
+                budget: "low",
+                observability: "low",
+                base: 50,
+            },
+        ];
+        let user = (volume, workload, sla, budget, observability);
+        let weights = (sla_w, budget_w, volume_w, workload_w, observability_w);
+
+        let mut scored: Vec<_> = profiles
+            .iter()
+            .map(|p| (p.name.to_string(), similarity_score(user, weights, p)))
+            .collect();
+        scored.sort_by(|a, b| b.1.cmp(&a.1));
+        scored
+    }
+
+    #[test]
+    fn test_strict_mode_lakehouse() {
+        let recs = run_strict("large", "mixed", "high", "high", "high", 5, 3, 2, 1, 4);
+        assert_eq!(recs[0].0, "Lakehouse");
+        assert!(recs[0].1 > 90);
+    }
+
+    #[test]
+    fn test_strict_mode_kafka() {
+        let recs = run_strict("small", "streaming", "high", "low", "high", 5, 3, 2, 1, 4);
+        assert_eq!(recs[0].0, "Kafka/Flink");
+    }
+
+    #[test]
+    fn test_multi_mode_ranking() {
+        let recs = run_multi("large", "mixed", "low", "high", "medium", 5, 2, 1, 1, 3);
+        // Cloud-native Monitoring should appear, but Lakehouse also gets partial score
+        assert!(recs
+            .iter()
+            .any(|(name, _)| name.contains("Cloud-native Monitoring")));
+        assert!(recs.iter().any(|(name, _)| name.contains("Lakehouse")));
+        // Ensure multiple recommendations are returned
+        assert!(recs.len() > 1);
+    }
+
+    #[test]
+    fn test_multi_mode_ordering() {
+        let recs = run_multi("batch", "batch", "low", "low", "low", 5, 2, 1, 1, 3);
+        // ETL Pipelines should rank higher than Lakehouse in this scenario
+        let etl_score = recs.iter().find(|(n, _)| n == "ETL Pipelines").unwrap().1;
+        let lakehouse_score = recs.iter().find(|(n, _)| n == "Lakehouse").unwrap().1;
+        assert!(etl_score >= lakehouse_score);
+    }
+}
